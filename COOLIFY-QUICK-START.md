@@ -17,7 +17,9 @@
 - Arquivo: `docker-compose.coolify.yml`
 - Branch: `main`
 
-**Nota**: Os serviços não expõem portas diretamente. O Coolify gerencia automaticamente o roteamento através do reverse proxy.
+**Portas utilizadas**:
+- **Airflow**: `8081:8080`
+- **SMTP4Dev**: `5002:80`, `2525:25`, `1143:143`
 
 ### 2. Variáveis Essenciais:
 ```env
@@ -36,8 +38,8 @@ INLABS_PORTAL_PASSWORD=senha-inlabs
 ```
 
 ### 4. Acessos:
-- **Airflow**: `https://seu-dominio.com`
-- **SMTP4Dev**: `https://smtp.seu-dominio.com` (opcional)
+- **Airflow**: `https://seu-dominio.com` (ou `http://servidor:8081`)
+- **SMTP4Dev**: `https://smtp.seu-dominio.com` (ou `http://servidor:5002`)
 
 ## 🔍 Health Check:
 ```bash

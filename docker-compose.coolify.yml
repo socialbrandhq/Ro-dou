@@ -75,7 +75,8 @@ services:
   airflow-webserver:
     <<: *airflow-common
     command: webserver
-    # Port removed - Coolify will handle routing through reverse proxy
+    ports:
+      - "8081:8080"  # Changed from 8080 to 8081 to avoid conflicts
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
       interval: 30s
@@ -90,7 +91,6 @@ services:
       - "coolify.managed=true"
       - "coolify.version=1.0"
       - "coolify.name=ro-dou-webserver"
-      - "coolify.port=8080"
 
   airflow-scheduler:
     <<: *airflow-common
@@ -113,7 +113,10 @@ services:
   smtp4dev:
     image: rnwood/smtp4dev:v3
     restart: unless-stopped
-    # Ports removed - Coolify will handle routing through reverse proxy
+    ports:
+      - '5002:80'    # Changed from 5001 to 5002 to avoid conflicts
+      - '2525:25'    # Changed from 25 to 2525 to avoid conflicts
+      - '1143:143'   # Changed from 143 to 1143 to avoid conflicts
     volumes:
       - smtp4dev-data:/smtp4dev
     environment:
@@ -124,7 +127,6 @@ services:
       - "coolify.managed=true"
       - "coolify.version=1.0"
       - "coolify.name=ro-dou-smtp"
-      - "coolify.port=80"
 
   # Initialization service
   airflow-init:

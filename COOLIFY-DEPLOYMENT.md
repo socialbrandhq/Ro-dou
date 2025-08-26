@@ -70,18 +70,22 @@ Execute o seguinte comando para gerar uma chave Fernet:
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-### Passo 3: Configurar Domínios e Roteamento
+### Passo 3: Configurar Domínios e Portas
 
 1. **Configurar Domínio Principal**
    - No Coolify, vá para "Domains"
    - Adicione seu domínio principal (ex: `ro-dou.seudominio.com`)
-   - O Coolify detectará automaticamente o serviço `airflow-webserver` através da label `coolify.port=8080`
+   - Configure para apontar para o serviço `airflow-webserver` na porta `8081`
 
 2. **Configurar Domínio SMTP (Opcional)**
    - Adicione subdomínio para SMTP4Dev (ex: `smtp.ro-dou.seudominio.com`)
-   - O Coolify detectará automaticamente o serviço `smtp4dev` através da label `coolify.port=80`
+   - Configure para apontar para o serviço `smtp4dev` na porta `5002`
 
-**Importante**: Os serviços não expõem portas diretamente. O Coolify gerencia todo o roteamento através do seu reverse proxy, fornecendo automaticamente SSL/TLS e balanceamento de carga.
+**Portas utilizadas (para evitar conflitos)**:
+- **Airflow Webserver**: `8081:8080` (acesso externo via porta 8081)
+- **SMTP4Dev Web UI**: `5002:80` (acesso externo via porta 5002)
+- **SMTP Server**: `2525:25` (porta SMTP alternativa)
+- **IMAP Server**: `1143:143` (porta IMAP alternativa)
 
 ### Passo 4: Deploy da Aplicação
 
@@ -112,11 +116,11 @@ Após o deploy bem-sucedido, execute o script de inicialização:
 
 ### Acessar a Interface Web
 
-- **Airflow UI**: `https://ro-dou.seudominio.com`
+- **Airflow UI**: `https://ro-dou.seudominio.com` (ou `http://servidor:8081` para acesso direto)
   - Usuário: valor de `_AIRFLOW_WWW_USER_USERNAME`
   - Senha: valor de `_AIRFLOW_WWW_USER_PASSWORD`
 
-- **SMTP4Dev**: `https://smtp.ro-dou.seudominio.com` (se configurado)
+- **SMTP4Dev**: `https://smtp.ro-dou.seudominio.com` (ou `http://servidor:5002` para acesso direto)
 
 ### Configurar DAGs Personalizados
 
@@ -178,7 +182,11 @@ A aplicação inclui health checks automáticos:
    ```
    Error: Bind for 0.0.0.0:8080 failed: port is already allocated
    ```
-   **Solução**: Este erro foi resolvido removendo mapeamentos explícitos de portas do `docker-compose.coolify.yml`. O Coolify agora gerencia todo o roteamento através do reverse proxy.
+   **Solução**: Este problema foi resolvido alterando as portas no `docker-compose.coolify.yml`:
+   - Airflow: `8081:8080` (ao invés de `8080:8080`)
+   - SMTP4Dev: `5002:80` (ao invés de `5001:80`)
+   - SMTP: `2525:25` (ao invés de `25:25`)
+   - IMAP: `1143:143` (ao invés de `143:143`)
 
 2. **Serviços não iniciam**
    ```bash

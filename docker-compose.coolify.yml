@@ -1,0 +1,175 @@
+version: '3.8'
+
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  environment: &airflow-common-env
+    # Core Airflow Configuration
+    AIRFLOW__API__AUTH_BACKEND: 'airflow.api.auth.backend.basic_auth'
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: '${AIRFLOW__CORE__DEFAULT_TIMEZONE:-America/Sao_Paulo}'
+    AIRFLOW__CORE__ENABLE_XCOM_PICKLING: 'true'
+    AIRFLOW__CORE__EXECUTOR: '${AIRFLOW__CORE__EXECUTOR:-LocalExecutor}'
+    AIRFLOW__CORE__FERNET_KEY: '${AIRFLOW__CORE__FERNET_KEY}'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: '${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}'
+    
+    # Email Configuration
+    AIRFLOW__EMAIL__DEFAULT_EMAIL_ON_FAILURE: 'false'
+    AIRFLOW__EMAIL__DEFAULT_EMAIL_ON_RETRY: 'false'
+    
+    # SMTP Configuration
+    AIRFLOW__SMTP__SMTP_HOST: '${AIRFLOW__SMTP__SMTP_HOST:-smtp4dev}'
+    AIRFLOW__SMTP__SMTP_MAIL_FROM: '${AIRFLOW__SMTP__SMTP_MAIL_FROM}'
+    AIRFLOW__SMTP__SMTP_PORT: '${AIRFLOW__SMTP__SMTP_PORT:-25}'
+    AIRFLOW__SMTP__SMTP_STARTTLS: '${AIRFLOW__SMTP__SMTP_STARTTLS:-false}'
+    AIRFLOW__SMTP__SMTP_USER: '${AIRFLOW__SMTP__SMTP_USER:-}'
+    AIRFLOW__SMTP__SMTP_PASSWORD: '${AIRFLOW__SMTP__SMTP_PASSWORD:-}'
+    
+    # Webserver Configuration
+    AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE: '${AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE:-America/Sao_Paulo}'
+    AIRFLOW__WEBSERVER__SECRET_KEY: '${AIRFLOW__WEBSERVER__SECRET_KEY}'
+    AIRFLOW__WEBSERVER__WORKERS: '${AIRFLOW__WEBSERVER__WORKERS:-1}'
+
+    # Initialization
+    _AIRFLOW_DB_UPGRADE: '${_AIRFLOW_DB_UPGRADE:-true}'
+    _AIRFLOW_WWW_USER_CREATE: '${_AIRFLOW_WWW_USER_CREATE:-true}'
+    _AIRFLOW_WWW_USER_USERNAME: '${_AIRFLOW_WWW_USER_USERNAME:-airflow}'
+    _AIRFLOW_WWW_USER_PASSWORD: '${_AIRFLOW_WWW_USER_PASSWORD:-airflow}'
+
+    # Connections
+    AIRFLOW_CONN_EXAMPLE_DATABASE_CONN: '${AIRFLOW_CONN_EXAMPLE_DATABASE_CONN}'
+
+    # Ro-dou Configuration
+    RO_DOU__DAG_CONF_DIR: '/opt/airflow/dags/ro_dou/dag_confs'
+
+  volumes:
+    # Persistent volumes for data
+    - airflow-logs:/opt/airflow/logs
+    - postgres-data:/var/lib/postgresql/data
+  user: "${AIRFLOW_UID:-50000}:0"
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_USER: '${POSTGRES_USER:-airflow}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD:-airflow}'
+      POSTGRES_DB: '${POSTGRES_DB:-airflow}'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./dag_load_inlabs/sql/:/sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-airflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - default
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - default
+    labels:
+      # Coolify labels for automatic service discovery
+      - "coolify.managed=true"
+      - "coolify.version=1.0"
+      - "coolify.name=ro-dou-webserver"
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD", "python", "-c", "import airflow.jobs.scheduler_job; print('Scheduler is running')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - default
+    labels:
+      - "coolify.managed=true"
+      - "coolify.version=1.0"
+      - "coolify.name=ro-dou-scheduler"
+
+  # Email service for development/testing
+  smtp4dev:
+    image: rnwood/smtp4dev:v3
+    restart: unless-stopped
+    ports:
+      - '5001:80'    # Web UI
+      - '25:25'      # SMTP port
+      - '143:143'    # IMAP port
+    volumes:
+      - smtp4dev-data:/smtp4dev
+    environment:
+      - ServerOptions__HostName=smtp4dev
+    networks:
+      - default
+    labels:
+      - "coolify.managed=true"
+      - "coolify.version=1.0"
+      - "coolify.name=ro-dou-smtp"
+
+  # Initialization service
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        # Wait for postgres
+        while ! pg_isready -h postgres -U ${POSTGRES_USER:-airflow}; do
+          echo "Waiting for postgres..."
+          sleep 2
+        done
+        
+        # Initialize Airflow
+        airflow db init
+        airflow users create \
+          --username ${_AIRFLOW_WWW_USER_USERNAME:-airflow} \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com \
+          --password ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+        
+        echo "Airflow initialization completed"
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_UPGRADE: 'true'
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+    driver: local
+  airflow-logs:
+    driver: local
+  smtp4dev-data:
+    driver: local
+
+networks:
+  default:
+    driver: bridge

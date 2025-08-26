@@ -70,16 +70,18 @@ Execute o seguinte comando para gerar uma chave Fernet:
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-### Passo 3: Configurar Domínios e Portas
+### Passo 3: Configurar Domínios e Roteamento
 
 1. **Configurar Domínio Principal**
    - No Coolify, vá para "Domains"
    - Adicione seu domínio principal (ex: `ro-dou.seudominio.com`)
-   - Configure para apontar para o serviço `airflow-webserver` na porta `8080`
+   - O Coolify detectará automaticamente o serviço `airflow-webserver` através da label `coolify.port=8080`
 
 2. **Configurar Domínio SMTP (Opcional)**
    - Adicione subdomínio para SMTP4Dev (ex: `smtp.ro-dou.seudominio.com`)
-   - Configure para apontar para o serviço `smtp4dev` na porta `80`
+   - O Coolify detectará automaticamente o serviço `smtp4dev` através da label `coolify.port=80`
+
+**Importante**: Os serviços não expõem portas diretamente. O Coolify gerencia todo o roteamento através do seu reverse proxy, fornecendo automaticamente SSL/TLS e balanceamento de carga.
 
 ### Passo 4: Deploy da Aplicação
 
@@ -172,7 +174,13 @@ A aplicação inclui health checks automáticos:
 
 ### Problemas Comuns
 
-1. **Serviços não iniciam**
+1. **Erro de porta já alocada (port already allocated)**
+   ```
+   Error: Bind for 0.0.0.0:8080 failed: port is already allocated
+   ```
+   **Solução**: Este erro foi resolvido removendo mapeamentos explícitos de portas do `docker-compose.coolify.yml`. O Coolify agora gerencia todo o roteamento através do reverse proxy.
+
+2. **Serviços não iniciam**
    ```bash
    # Verificar logs
    docker logs ro-dou-airflow-webserver-1

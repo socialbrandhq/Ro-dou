@@ -17,6 +17,8 @@
 - Arquivo: `docker-compose.coolify.yml`
 - Branch: `main`
 
+**Nota**: Os serviços não expõem portas diretamente. O Coolify gerencia automaticamente o roteamento através do reverse proxy.
+
 ### 2. Variáveis Essenciais:
 ```env
 POSTGRES_PASSWORD=sua-senha-segura
